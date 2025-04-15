@@ -1,0 +1,9 @@
+.local/
+.python-version
+cdk.context.json
+cdk.out/
+.env
+*.env
+*.pyc
+__pycache__/
+*.log
