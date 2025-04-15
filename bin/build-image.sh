@@ -85,27 +85,49 @@ log "Logging into ECR"
 aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com || handle_error "Failed to login to ECR"
 
 # Build and push multi-platform images
+BUILT_PLATFORMS=()
 for platform in "${PLATFORM_ARRAY[@]}"; do
-    log "Building and pushing image for platform: $platform"
+    # Replace forward slash with hyphen in platform name for tag
+    platform_tag=$(echo $platform | tr '/' '-')
+    log "📦 Building and pushing image for platform: $platform"
     docker build \
         --platform $platform \
         --build-arg BRANCH=$BRANCH \
-        -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-$platform \
+        -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-$platform_tag \
         . || handle_error "Failed to build image for platform $platform"
     
-    docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-$platform || handle_error "Failed to push image for platform $platform"
+    docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-$platform_tag || handle_error "Failed to push image for platform $platform"
+    
+    # Store the full image reference for manifest
+    BUILT_PLATFORMS+=("$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-$platform_tag")
 done
 
-# Create and push manifest
-log "Creating and pushing manifest"
-docker manifest create $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest \
-    $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-linux/amd64 \
-    $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-linux/arm64 || handle_error "Failed to create manifest"
+# Create and push manifest if we have built platforms
+if [ ${#BUILT_PLATFORMS[@]} -gt 0 ]; then
+    log "Creating and pushing manifest"
+    # Delete existing manifest if it exists
+    log "Deleting existing manifest if it exists"
+    docker manifest rm $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest || true
 
-docker manifest push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest || handle_error "Failed to push manifest"
+    # Create empty manifest
+    docker manifest create $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest || handle_error "Failed to create manifest"
 
-# Verify ECR images
-log "Verifying ECR images"
-aws ecr --region ${AWS_REGION} describe-images --repository-name $ECR_REPO || handle_error "Failed to verify ECR images"
+    # Add each platform to the manifest with proper annotations
+    for platform in "${PLATFORM_ARRAY[@]}"; do
+        platform_tag=$(echo $platform | tr '/' '-')
+        log "Adding $platform to manifest"
+        docker manifest add \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest-$platform_tag || handle_error "Failed to add platform $platform to manifest"
+    done
+
+    docker manifest push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest || handle_error "Failed to push manifest"
+
+    # Verify ECR images
+    log "Verifying ECR images"
+    aws ecr --region ${AWS_REGION} describe-images --repository-name $ECR_REPO 1>/dev/null || handle_error "Failed to verify ECR images"
+else
+    log "No platforms were built successfully. Skipping manifest creation."
+fi
 
 log "Build completed successfully!"

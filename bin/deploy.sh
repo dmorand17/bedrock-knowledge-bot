@@ -22,7 +22,7 @@ echo "AWS Region: $AWS_REGION"
 
 # Build and push Docker image
 echo "📦 Building and pushing Docker image..."
-"$SCRIPT_DIR/build-image.sh"
+"$SCRIPT_DIR/build-image.sh" -p linux/arm64
 
 # Deploy CDK application
 echo "🔄 Deploying CDK application..."

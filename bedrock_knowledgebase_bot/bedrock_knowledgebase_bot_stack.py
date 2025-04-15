@@ -84,5 +84,9 @@ class BedrockKnowledgeBotStack(Stack):
                     },
                 },
                 public_load_balancer=True,
+                runtime_platform=ecs.RuntimePlatform(
+                    cpu_architecture=ecs.CpuArchitecture.ARM64,
+                    operating_system_family=ecs.OperatingSystemFamily.LINUX,
+                ),
             )
         )

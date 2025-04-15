@@ -1,14 +1,32 @@
-# Use the latest Python image as the base image
-FROM python:3.13-slim
+# Build stage
+FROM python:3.13-slim as builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the project files into the container
-COPY requirements.txt ./assets/streamlit /app
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends gcc
+
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+
+# Final stage
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Copy wheels from builder
+COPY --from=builder /app/wheels /wheels
+COPY --from=builder /app/requirements.txt .
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache /wheels/*
+
+# Copy the project files into the container
+COPY ./assets/streamlit .
 
 # Expose the default Streamlit port
 EXPOSE 8501
