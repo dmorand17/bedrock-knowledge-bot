@@ -40,3 +40,7 @@ else
 fi
 
 echo "✅ Deployment completed successfully!"
+
+# Run cleanup script
+echo "🧹 Cleaning up local Docker resources..."
+"$SCRIPT_DIR/cleanup.sh"

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Main layout
 st.set_page_config(
-    page_title="AnyU Campus Services Assistant",
+    page_title="AnyU Campus Services Assistant Bot",
     page_icon="🏫",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -119,7 +119,7 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
                             },
                             "promptTemplate": {
                                 "textPromptTemplate": """
-        Human: You are a question answering agent. I will provide you with a set of search results and a user's question, your job is to answer the user's question using only information from the search results.  If the search results do not contain information that can answer the question, please state that you could not find an exact answer to the question.Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion. Format results as markdown when possible.
+        Human: You are a question answering agent. I will provide you with a set of search results and a user's question. Your job is to answer the user's question using only information from the search results. If the search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion. 
 
             Here are the search results in numbered order:
             <context>
@@ -130,8 +130,11 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
             <question>
             $query$
             </question>
-
+            
+            Format results as markdown when possible.
             You MUST always end the response with 'Thank You'.
+
+            $output_format_instructions$
         Assistant:   
 """
                             },
@@ -145,9 +148,9 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
             citations = response.get("citations", [])
 
             # Build citations section
-            logger.info("Getting citations...")
             citations_text = ""
             if citations:
+                logger.info("Getting citations...")
                 citations_text = "\n\n### Sources\n"
                 locations = set()
                 for i, citation in enumerate(citations, 1):
@@ -164,7 +167,6 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
             formatted_response = f"""
 {response_text}
 
-*Generated using knowledge base: {KNOWLEDGE_BASE_ID}*
 {citations_text}
 """
             return formatted_response
@@ -191,8 +193,8 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
             usage = response_body.get("usage", {})
             output_tokens = usage.get("outputTokens")
             input_tokens = usage.get("inputTokens")
-            st.session_state["token_counts"]["output"] += output_tokens
-            st.session_state["token_counts"]["input"] += input_tokens
+            # st.session_state["token_counts"]["output"] += output_tokens
+            # st.session_state["token_counts"]["input"] += input_tokens
 
             formatted_response = f"""
 {response_text}
@@ -260,7 +262,7 @@ with st.sidebar:
 
         st.markdown("### ⚡ Model Parameters")
         # Model-specific defaults
-        default_max_tokens = 1000
+        default_max_tokens = 2000
         default_temperature = 0.2
         default_top_p = 0.2
 

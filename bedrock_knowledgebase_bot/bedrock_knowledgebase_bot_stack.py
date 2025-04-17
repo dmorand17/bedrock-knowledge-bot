@@ -1,9 +1,12 @@
-from aws_cdk import Stack
+from aws_cdk import Duration, Stack
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr as ecr
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_ecs_patterns as ecs_patterns
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as _lambda
 from constructs import Construct
 
 
@@ -41,6 +44,8 @@ class BedrockKnowledgeBotStack(Stack):
             iam.PolicyStatement(
                 actions=[
                     "bedrock:InvokeModel",
+                    "bedrock:RetrieveAndGenerate",
+                    "bedrock:Retrieve",
                     "bedrock:ListFoundationModels",
                     "bedrock:GetFoundationModel",
                 ],
@@ -65,6 +70,44 @@ class BedrockKnowledgeBotStack(Stack):
             )
         )
 
+        # Create Lambda function for knowledge base sync
+        sync_lambda = _lambda.Function(
+            self,
+            "KnowledgeBaseSyncFunction",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="index.handler",
+            code=_lambda.Code.from_asset("lambda/knowledge_base_sync"),
+            environment={
+                "DATA_SOURCE_ID": self.node.try_get_context("data_source_id"),
+                "KNOWLEDGE_BASE_ID": self.node.try_get_context("knowledge_base_id"),
+            },
+            timeout=Duration.minutes(15),
+        )
+
+        # Add Bedrock permissions to the Lambda function
+        sync_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:StartIngestionJob", "bedrock:GetIngestionJob"],
+                resources=["*"],
+            )
+        )
+
+        # Create EventBridge rule for weekly sync
+        weekly_sync_rule = events.Rule(
+            self,
+            "WeeklyKnowledgeBaseSyncRule",
+            schedule=events.Schedule.cron(
+                minute="0",
+                hour="0",
+                day="1",  # First day of the week
+                month="*",
+                year="*",
+            ),
+        )
+
+        # Add Lambda as target for the EventBridge rule
+        weekly_sync_rule.add_target(targets.LambdaFunction(sync_lambda))
+
         load_balanced_fargate_service = (
             ecs_patterns.ApplicationLoadBalancedFargateService(
                 self,
@@ -80,7 +123,9 @@ class BedrockKnowledgeBotStack(Stack):
                     "execution_role": execution_role,
                     "task_role": task_role,
                     "environment": {
-                        "MODEL_TYPE": model_type,
+                        "KNOWLEDGE_BASE_ID": self.node.try_get_context(
+                            "knowledge_base_id"
+                        ),
                     },
                 },
                 public_load_balancer=True,
