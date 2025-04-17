@@ -4,7 +4,6 @@ import os
 
 import boto3
 import streamlit as st
-from streamlit_extras.colored_header import colored_header
 
 # Configure logging
 logging.basicConfig(
@@ -119,7 +118,7 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
                             },
                             "promptTemplate": {
                                 "textPromptTemplate": """
-        Human: You are a question answering agent. I will provide you with a set of search results and a user's question. Your job is to answer the user's question using only information from the search results. If the search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion. 
+        Human: You are a question answering agent. I will provide you with a set of search results and a user's question. Your job is to answer the user's question using only information from the search results. If the search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.  Format results as markdown when possible.
 
             Here are the search results in numbered order:
             <context>
@@ -131,7 +130,6 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
             $query$
             </question>
             
-            Format results as markdown when possible.
             You MUST always end the response with 'Thank You'.
 
             $output_format_instructions$
@@ -142,7 +140,7 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
                     },
                 },
             )
-            logger.info(f"Response: {json.dumps(response, indent=4, default=str)}")
+            logger.debug(f"Response: {json.dumps(response, indent=4, default=str)}")
             # Format the response as markdown with citations
             response_text = response["output"]["text"]
             citations = response.get("citations", [])
@@ -199,8 +197,6 @@ def generate_response(prompt, model_id, max_tokens, temperature, top_p):
             formatted_response = f"""
 {response_text}
 
-*Generated using {model_id}*
-
 *Tokens: Input: {input_tokens}, Output: {output_tokens}*
 """
             return formatted_response
@@ -216,11 +212,8 @@ logger.info("Starting Streamlit app")
 
 # Sidebar configuration
 with st.sidebar:
-    colored_header(
-        label="AnyU Campus Services",
-        description="Your AI-powered campus assistant",
-        color_name="blue-70",
-    )
+    st.header("AnyU Campus Services", divider="rainbow")
+    st.caption("Your AI-powered campus assistant")
 
     # New chat button
     if st.button("🆕 Start New Chat", use_container_width=True):
@@ -228,16 +221,30 @@ with st.sidebar:
         st.rerun()
 
     # Conversation history
-    st.markdown("### 📚 Conversation History")
-    for i, conversation in enumerate(st.session_state["history"]):
-        if st.button(
-            f"💬 Chat {i + 1} - {conversation[0]['message'][:30]}..."
-            if len(conversation[0]["message"]) > 30
-            else f"💬 Chat {i + 1} - {conversation[0]['message']}",
-            use_container_width=True,
-        ):
-            st.session_state["current_conversation"] = conversation
-            st.rerun()
+    # st.markdown("### 📚 Conversation History")
+    # logger.info(
+    #     f"History: {json.dumps(st.session_state['history'], indent=4, default=str)}"
+    # )
+    # logger.info(f"Conversation length: {len(st.session_state['history'])}")
+    # for i, conversation in enumerate(st.session_state["history"], start=0):
+    #     # Get the first message from the conversation
+    #     logger.info(f"Processing conversation: {i}")
+    #     # logger.info(f"Conversation: {json.dumps(conversation, indent=4, default=str)}")
+    #     current_message = conversation[i]["message"] if conversation else ""
+    #     is_user = conversation[i].get("is_user", False) if conversation else False
+
+    #     if is_user:
+    #         button_label = (
+    #             f"💬 {current_message[:30]}..."
+    #             if len(current_message) > 30
+    #             else f"💬 {current_message}"
+    #         )
+
+    #         if st.button(
+    #             button_label, use_container_width=True, key=f"conversation_{i}"
+    #         ):
+    #             st.session_state["current_conversation"] = conversation
+    #             st.rerun()
 
     # Advanced settings expander
     with st.expander("⚙️ Advanced Settings", expanded=False):
@@ -247,16 +254,17 @@ with st.sidebar:
         model_id = st.selectbox(
             "🤖 Choose a Bedrock Model",
             [
-                "amazon.nova-lite-v1:0",
                 "amazon.nova-pro-v1:0",
+                "amazon.nova-lite-v1:0",
             ],
             index=0,
-            help="Select the model to use. Nova Lite is the recommended default for most use cases. Nova Pro offers enhanced capabilities for complex tasks.",
+            help="Select the model to use. Nova Pro is the recommended default for most use cases. ",
         )
 
         # Knowledge Base selection
         knowledge_base_id = st.text_input(
             "📚 Knowledge Base ID (optional)",
+            value=KNOWLEDGE_BASE_ID,
             help="Enter the ID of your Bedrock Knowledge Base to enable RAG",
         )
 
@@ -292,11 +300,14 @@ with st.sidebar:
         )
 
 # Main chat interface
-colored_header(
-    label="Chat with Campus Services Assistant",
-    description="Ask me anything about campus services!",
-    color_name="blue-70",
-)
+# colored_header(
+#     label="Chat with Campus Services Assistant",
+#     description="Ask me anything about campus services!",
+#     color_name="blue-70",
+# )
+
+st.header("Chat with Campus Services Assistant", divider="rainbow")
+st.caption("Ask me anything about campus services!")
 
 # Display current conversation
 for message in st.session_state["current_conversation"]:
@@ -337,7 +348,16 @@ if prompt:
     # Save conversation to history if it's not empty
     if len(st.session_state["current_conversation"]) > 0:
         # Check if this conversation is already in history
-        if st.session_state["current_conversation"] not in st.session_state["history"]:
+        logger.info(
+            f"Current conversation: {st.session_state['current_conversation'][0]}"
+        )
+        if (
+            st.session_state["current_conversation"][0]
+            not in st.session_state["history"]
+        ):
+            logger.info(
+                f"Appending current conversation to history: {st.session_state['current_conversation']}"
+            )
             st.session_state["history"].append(
                 st.session_state["current_conversation"].copy()
             )

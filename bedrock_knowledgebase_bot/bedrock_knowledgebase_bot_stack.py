@@ -1,3 +1,5 @@
+import datetime
+
 from aws_cdk import Duration, Stack
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr as ecr
@@ -99,7 +101,7 @@ class BedrockKnowledgeBotStack(Stack):
             schedule=events.Schedule.cron(
                 minute="0",
                 hour="0",
-                day="1",  # First day of the week
+                day="7",  # First day of the week
                 month="*",
                 year="*",
             ),
@@ -125,6 +127,9 @@ class BedrockKnowledgeBotStack(Stack):
                     "environment": {
                         "KNOWLEDGE_BASE_ID": self.node.try_get_context(
                             "knowledge_base_id"
+                        ),
+                        "DEPLOY_TIME": datetime.datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
                         ),
                     },
                 },
